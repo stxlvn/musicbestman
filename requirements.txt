@@ -1,0 +1,8 @@
+telethon
+flask
+werkzeug
+aiohttp
+Pillow
+fonttools
+mutagen
+yt-dlp
