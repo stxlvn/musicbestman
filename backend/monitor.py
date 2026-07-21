@@ -61,7 +61,7 @@ def check_nowplaying_freshness():
 
 
 def check_stream_reachable():
-    for path in ("/stream", "/stream.flac"):
+    for path in ("/stream", "/stream.flac", "/stream-web.flac"):
         try:
             with urllib.request.urlopen(f"http://127.0.0.1:8000{path}", timeout=5) as resp:
                 if resp.status != 200:

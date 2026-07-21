@@ -106,7 +106,10 @@ Installed, but nothing is running yet. Before starting services:
      API keys).
 
   2. Set the SAME Icecast source password in /etc/icecast2/icecast.xml's
-     <source-password>, then: systemctl restart icecast2
+     <source-password>. Also raise <limits><sources> to at least 3 (radio.liq
+     opens 3 concurrent source connections: MP3, FLAC, and a metadata-free
+     FLAC copy for the web player -- Icecast's own default of 2 rejects the
+     third with a 403). Then: systemctl restart icecast2
 
   3. Build the initial track index (one-time, needs step 1's Telegram
      creds already in the environment):

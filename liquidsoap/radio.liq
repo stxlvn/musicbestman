@@ -6,7 +6,7 @@ settings.log.level.set(3)
 
 # Set via the systemd unit's EnvironmentFile (see systemd/radio.service) --
 # never hardcode this in the script itself.
-icecast_password = getenv("ICECAST_PASSWORD")
+icecast_password = environment.get(default="", "ICECAST_PASSWORD")
 
 # Unix socket only (no telnet/TCP), so it's only reachable by something
 # already running on this box -- the admin panel's "skip current track"
@@ -84,6 +84,40 @@ output.icecast(
   description="Lossless FLAC, Музыка в высоком качестве",
   genre="Various",
   radio
+)
+
+# Second, web-player-only copy of the same lossless mount, fed a
+# metadata-stripped version of the source -- confirmed directly (a small
+# standalone test with simulated track changes, byte-level Ogg page
+# inspection, then verified again against 5 minutes of real live traffic):
+# every metadata update reaching this encoder makes it open a fresh
+# logical stream (new serial number, fresh BOS/header pages) so the
+# updated title can be embedded, which is exactly the "chained stream
+# restart on every track change" the comment above and icy_flac_proxy.py's
+# own comment both describe as intentional/relied upon -- but some mobile
+# browsers' native Ogg decoders lose sync at that restart and go silent
+# while still reporting playback progress, confirmed directly against a
+# real device, with no clean client-side way to detect "decoding but
+# silent" without routing the stream through a Web Audio graph, which
+# introduced worse regressions of its own (see git history). The web
+# player never reads embedded Ogg metadata at all -- it polls
+# nowplaying.json instead -- so it has nothing to lose from a source with
+# no metadata track. source.drop.metadata makes that concrete: this
+# encoder never sees a metadata event, never restarts its logical stream,
+# and the original `stream.flac` mount above is untouched for the
+# listeners actually reading per-track Ogg tags (foobar2000, mpv, etc).
+# Needs icecast.xml's <limits><sources> raised to at least 3 to allow this
+# third concurrent source connection alongside the MP3 and plain FLAC ones.
+output.icecast(
+  %ogg(%flac),
+  host="127.0.0.1",
+  port=8000,
+  password=icecast_password,
+  mount="stream-web.flac",
+  name="Your Radio (Lossless, web)",
+  description="Lossless FLAC, Музыка в высоком качестве",
+  genre="Various",
+  source.drop.metadata(radio)
 )
 
 # HLS mirror of the same source, purely so the web player can seek backward
