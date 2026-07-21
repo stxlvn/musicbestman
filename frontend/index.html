@@ -1940,6 +1940,10 @@
         applyQuality(q);
         if (q === 'flac') {
           showSnackbar('FLAC расходует в 6-8 раз больше трафика, чем MP3');
+          if (userWantsPlayback) {
+            ensureSilenceDetector();
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+          }
         }
         if (!radioAudio.paused) {
           startPlayback();
@@ -2000,8 +2004,20 @@
       if (radioAudio.paused) {
         userWantsPlayback = true;
         clearReconnectTimer();
-        ensureSilenceDetector();
-        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+        // FLAC-only -- routing MP3 through this too would make its
+        // playback depend on the AudioContext staying 'running', for a
+        // problem (Ogg chained-stream desync) that never applies to it.
+        // Confirmed directly: MP3 listeners started getting spurious
+        // reconnects while audio was fine, right after this went in
+        // unconditionally -- some browsers auto-suspend an AudioContext
+        // they judge idle/backgrounded, which silently cuts the *only*
+        // path to speakers once a MediaElementSourceNode is attached, and
+        // the watchdog then "correctly" reacts to the real (self-inflicted)
+        // silence that causes.
+        if (radioQuality === 'flac') {
+          ensureSilenceDetector();
+          if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+        }
         startPlayback();
         setPlayingUI(true);
         playerPlayPauseBtn.title = 'Загрузка...';
@@ -2149,7 +2165,16 @@
         return;
       }
       if (radioQuality === 'flac') {
-        if (isAudiblySilent()) {
+        // A suspended context reads as silence but isn't the decoder-desync
+        // this exists to catch -- some browsers suspend an AudioContext
+        // they judge idle, which cuts the only path to speakers once
+        // routed through one. Try to resume and give it a few ticks to
+        // recover before treating it as real silence worth a reconnect
+        // over, instead of counting every tick it's down.
+        if (audioCtx && audioCtx.state === 'suspended') {
+          audioCtx.resume().catch(() => {});
+          silenceStreak = 0;
+        } else if (isAudiblySilent()) {
           silenceStreak++;
           if (silenceStreak >= SILENCE_TICKS_BEFORE_RECONNECT) {
             silenceStreak = 0;
