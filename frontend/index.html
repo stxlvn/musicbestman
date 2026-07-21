@@ -324,19 +324,26 @@
          "centering" has no room to do anything. .top-bar, still a
          separate flex-start-positioned sibling, stays exactly where it
          was. */
-      /* safe center, not plain center -- if this content is even slightly
-         taller than the space flex:1 actually gives it (the vh-capped
-         sizing above should mostly prevent that, but isn't an absolute
-         guarantee on every real device), plain "center" centers by
-         overflowing equally in both directions and clips whatever goes
-         past the container's own start edge -- invisibly, no scrollbar,
-         nothing to indicate it happened. That reads as exactly "content
-         stuck at the bottom, big empty gap above it": the clipped top
-         portion is real content that never got a chance to render,  not
-         actually empty space. "safe" falls back to start-aligned instead
-         of clipping when centering would overflow, matching the same
-         precedent already used for body's own centering on desktop. */
-      .layout { flex: 1; justify-content: safe center; }
+      /* flex: 1 relying on the flex-grow chain (body -> .layout) to work
+         out .layout's actual available height on its own went through
+         four straight rounds (plain center, safe center, dvh instead of
+         vh) with zero visible change each time -- something about that
+         chain isn't behaving as expected in practice, and rather than
+         keep guessing blind at *why*, this replaces it with an explicit,
+         directly-computed min-height instead: body's own top padding +
+         .top-bar's real height + the gap between them + the bottom-nav
+         reservation below, all subtracted from the real visible viewport
+         (dvh). That doesn't depend on flex-grow distributing space
+         correctly through a chain of nested containers at all -- .layout
+         is simply *told* how tall the remaining space actually is, and
+         its own justify-content: safe center (still doing the actual
+         centering) finally has real, unambiguous room to work with.
+         Duplicated for the narrower-phone breakpoint below since that one
+         resets body's top padding to 16px instead of 24px. */
+      .layout {
+        justify-content: safe center;
+        min-height: calc(100dvh - (24px + env(safe-area-inset-top)) - 36px - 20px - (24px + 64px + env(safe-area-inset-bottom)));
+      }
 
       /* Reserve room for the fixed bar itself, on top of whatever the
          narrower-phone breakpoint further down already reserves for the
@@ -348,6 +355,9 @@
     }
     @media (max-width: 420px) {
       body { padding-bottom: calc(16px + 64px + env(safe-area-inset-bottom)); }
+      .layout {
+        min-height: calc(100dvh - (16px + env(safe-area-inset-top)) - 36px - 20px - (16px + 64px + env(safe-area-inset-bottom)));
+      }
     }
 
     .bottom-nav {
