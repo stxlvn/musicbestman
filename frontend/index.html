@@ -267,6 +267,23 @@
       .card-about .feature-list { gap: 8px; margin-bottom: 14px; }
       .card-about .feature-icon { width: 34px; height: 34px; }
 
+      /* "Радио" tab elements weren't sharing one consistent left edge --
+         confirmed directly: #on-air-label/.now-playing/.np-actions-row
+         are all a 320px box, but #queue-panel (a separate container, not
+         nested inside .card-broadcast) was 380px with its own 20px
+         horizontal padding on top of that, shifting its actual content
+         (description, queue list, stream links) further right and wider
+         than everything above it. Matched to the same 320px box, padding
+         zeroed on the sides (kept top/bottom) so its children fill that
+         box edge to edge exactly like the others do. */
+      #queue-panel { max-width: 320px; padding-left: 0; padding-right: 0; }
+      /* .side-links was center-aligned, everything else in this tab is
+         left-aligned against that shared 320px box. !important since its
+         own base rule (same specificity, plain class selector) is
+         declared later in this stylesheet and would otherwise win the
+         cascade tie regardless of which rule "should" apply here. */
+      .side-links { text-align: left !important; }
+
       /* Reserve room for the fixed bar itself, on top of whatever the
          narrower-phone breakpoint further down already reserves for the
          notch/home-indicator -- declared after both existing body padding
@@ -732,7 +749,7 @@
          title hidden (or just shorter than 36px) the bar collapsed down
          to whatever line-height .top-bar-title's text needs, and "top:
          50%" of THAT shrunken box landed noticeably higher than before. */
-      .top-bar { position: relative; justify-content: flex-start; min-height: 36px; }
+      .top-bar { position: relative; justify-content: flex-start; align-items: center; min-height: 36px; }
       body[data-active-tab="radio"] .top-bar-title { display: block; }
       #admin-link {
         position: absolute;
