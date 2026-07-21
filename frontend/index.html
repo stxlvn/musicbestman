@@ -379,7 +379,7 @@
        rather than left running permanently (a plain class would only
        play once, on first page load, not on every later switch). */
     @keyframes tab-fade-in {
-      from { opacity: 0; transform: translateY(10px); }
+      from { opacity: 0; transform: translateY(16px); }
       to { opacity: 1; transform: translateY(0); }
     }
     /* !important -- .card-about/.card-broadcast (via .m3-card) and
@@ -390,8 +390,14 @@
        of this one -- same class of bug as every other !important already
        in this file, confirmed directly this was the second reason (after
        the inline style="animation:none" from clearEntranceAnimation) the
-       tab-switch fade never actually appeared. */
-    .tab-fade-in { animation: tab-fade-in 0.25s var(--md-sys-motion-easing-emphasized-decelerate) !important; }
+       tab-switch fade never actually appeared.
+       Duration/easing matches this page's own Material motion tokens
+       (--md-sys-motion-duration-long2/emphasized-decelerate, the same
+       pair used for every entrance animation already on this page) --
+       0.25s read as too quick/clipped, per request; this is the same
+       more deliberate, longer motion language Android's own
+       fragment/destination transitions use. */
+    .tab-fade-in { animation: tab-fade-in var(--md-sys-motion-duration-long2) var(--md-sys-motion-easing-emphasized-decelerate) !important; }
     @media (prefers-reduced-motion: reduce) {
       .tab-fade-in { animation: none !important; }
     }
@@ -575,15 +581,6 @@
       text-underline-offset: 2px;
     }
     .side-links-dot { margin: 0 6px; color: var(--md-sys-color-on-surface-variant); opacity: 0.5; }
-
-    /* Separates the stream links from the queue list above them now that
-       both live in #queue-panel together -- a plain color change or
-       spacing alone left them reading as one continuous list. */
-    .queue-divider {
-      border: none;
-      border-top: 1px solid rgba(255, 255, 255, 0.12);
-      margin: 20px 0 4px;
-    }
 
     .snackbar {
       position: fixed;
@@ -1838,6 +1835,16 @@
         </a>
       </div>
 
+      <div class="side-links stagger-item delay-4">
+        <a href="/radio/stream" target="_blank">MP3-поток</a>
+        <span class="side-links-dot">·</span>
+        <a href="/playlist.m3u" download>M3U</a>
+        <span class="side-links-dot">·</span>
+        <a href="/radio/stream.flac" target="_blank">FLAC-поток</a>
+        <span class="side-links-dot">·</span>
+        <a href="/playlist-flac.m3u" download>FLAC M3U</a>
+      </div>
+
       <div id="player-inline" class="player-inline">
         <div class="player-inline-header">
           <button type="button" id="player-collapse" class="player-icon-btn" title="Свернуть плеер" aria-label="Свернуть плеер">
@@ -1936,16 +1943,6 @@
     <div class="queue-list-wrap">
       <h2>Далее в эфире</h2>
       <ul id="queue-list" class="queue-list"></ul>
-    </div>
-    <hr class="queue-divider">
-    <div class="side-links stagger-item delay-4">
-      <a href="/radio/stream" target="_blank">MP3-поток</a>
-      <span class="side-links-dot">·</span>
-      <a href="/playlist.m3u" download>M3U</a>
-      <span class="side-links-dot">·</span>
-      <a href="/radio/stream.flac" target="_blank">FLAC-поток</a>
-      <span class="side-links-dot">·</span>
-      <a href="/playlist-flac.m3u" download>FLAC M3U</a>
     </div>
   </div>
   </div>
