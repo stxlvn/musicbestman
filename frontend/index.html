@@ -1867,17 +1867,20 @@
       const canTryHlsJs = radioQuality === 'mp3' && window.Hls && Hls.isSupported();
       if (canTryHlsJs) {
         // liveMaxLatencyDurationCount caps how far hls.js is allowed to
-        // drift behind the live edge before it force-seeks back -- at 6s
-        // segments, 10 meant up to 60s of drift. fetchNowPlaying() below
-        // reads hlsInstance.latency to delay revealing a new track until
-        // it's actually audible, but that delay is capped at 30s; letting
-        // real latency drift past that cap meant the site could reveal
-        // the new track's name/cover up to ~30s before a listener whose
-        // stream had drifted to the far end of that range actually heard
-        // it -- confirmed directly as "сильная задержка, играло
-        // предыдущее". Kept below the 30s reveal cap (with headroom) so
-        // real latency can never exceed what's actually compensated for.
-        const hls = new Hls({ liveSyncDurationCount: 3, liveMaxLatencyDurationCount: 4 });
+        // drift behind the live edge before it force-seeks back to live --
+        // at 6s segments, 8 means up to 48s of drift. Keep this in sync
+        // with the reveal-delay cap in fetchNowPlaying below (48s there
+        // too) -- that delay exists specifically so the displayed track
+        // never gets ahead of what a drifted listener can actually hear,
+        // so it needs to cover whatever drift this setting allows.
+        //
+        // Previously 4 (24s) specifically to close that gap tighter, but
+        // that made a *manual* 10s rewind (doRewind) land close enough to
+        // this ceiling that hls.js's own catch-up logic would silently snap
+        // the listener back to live again a few seconds later -- confirmed
+        // directly. 8 gives a deliberate rewind real room to stick while
+        // still bounded (not the original unbounded-feeling 10/60s).
+        const hls = new Hls({ liveSyncDurationCount: 3, liveMaxLatencyDurationCount: 8 });
         hlsInstance = hls;
         let started = false;
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -2043,16 +2046,31 @@
     // periodic watchdog below and the tab-visibility check right after it,
     // so "stalled" means the same thing in both places.
     //
-    // 2s threshold, not shorter: a live track transition or brief network
-    // jitter can legitimately leave currentTime looking static for a second
-    // or so even on a perfectly healthy stream -- much below that starts
-    // tearing down and reconnecting a stream that was about to recover on
-    // its own anyway.
+    // 2s threshold for the HLS (MP3) path, not shorter: a live track
+    // transition or brief network jitter can legitimately leave currentTime
+    // looking static for a second or so even on a perfectly healthy stream
+    // -- much below that starts tearing down and reconnecting a stream that
+    // was about to recover on its own anyway.
+    //
+    // FLAC gets a much longer one -- confirmed directly this was causing
+    // frequent unnecessary reconnects there: FLAC never uses hls.js (see
+    // startPlayback), it's a plain chunked stream with none of hls.js's own
+    // internal segment-retry/rebuffer handling, so a brief hiccup that hls.js
+    // would have quietly absorbed shows up here as a real timeupdate gap --
+    // and FLAC's 6-8x bandwidth makes that kind of hiccup more likely in the
+    // first place, not less. A full reconnect (tear down and refetch the
+    // stream from scratch, losing whatever was already buffered) is the
+    // wrong response to something the browser's own buffering would likely
+    // have recovered from within a few more seconds.
     let lastProgressAt = Date.now();
     radioAudio.addEventListener('timeupdate', () => { lastProgressAt = Date.now(); });
-    const STALL_THRESHOLD = 2000; // ms
+    const STALL_THRESHOLD_HLS = 2000; // ms
+    const STALL_THRESHOLD_PLAIN = 8000; // ms
+    function currentStallThreshold() {
+      return (radioQuality === 'mp3' && hlsInstance) ? STALL_THRESHOLD_HLS : STALL_THRESHOLD_PLAIN;
+    }
     function isPlaybackStalled() {
-      return radioAudio.paused || (Date.now() - lastProgressAt >= STALL_THRESHOLD);
+      return radioAudio.paused || (Date.now() - lastProgressAt >= currentStallThreshold());
     }
     setInterval(() => {
       if (!userWantsPlayback || radioAudio.paused) {
@@ -2060,7 +2078,7 @@
         return;
       }
       if (isPlaybackStalled()) {
-        scheduleReconnect('no timeupdate for ' + STALL_THRESHOLD + 'ms');
+        scheduleReconnect('no timeupdate for ' + currentStallThreshold() + 'ms');
       }
     }, 500);
 
@@ -2761,7 +2779,11 @@
         if (radioQuality === 'mp3' && hlsInstance) {
           const latency = hlsInstance.latency;
           if (Number.isFinite(latency) && latency > 0) {
-            displayDelayMs = Math.min(latency, 30) * 1000;
+            // Cap matches liveMaxLatencyDurationCount above (8 segments *
+            // 6s = 48s) -- real latency can never legitimately exceed that
+            // ceiling, so this only ever clamps a bogus/outlier reading,
+            // never the normal case.
+            displayDelayMs = Math.min(latency, 48) * 1000;
           }
         }
         npPendingUpdated = data.updated;
