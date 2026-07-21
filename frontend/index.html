@@ -2,7 +2,11 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- viewport-fit=cover: without it, black-translucent below has nothing
+       to actually apply to -- iOS keeps the WebView clipped to the area
+       below the status bar/notch regardless, so env(safe-area-inset-*)
+       stays 0 and the page never draws under it in the first place. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Your Radio</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎵</text></svg>">
   <!-- Installability: an installed (home-screen) web app gets meaningfully
@@ -57,7 +61,16 @@
       align-items: center;
       justify-content: flex-start;
       gap: 20px;
-      padding: 24px;
+      /* The env() terms resolve to 0 on anything without a notch/home
+         indicator (i.e. almost everywhere), so this is just "24px" there --
+         only adds real extra space on hardware that actually needs it, on
+         top of the same 24px everyone else gets. Body's own background
+         already matches --md-sys-color-background/theme-color, so the
+         status bar area (black-translucent) and the home-indicator area
+         read as the same surface as the rest of the page instead of a
+         mismatched black bar. */
+      padding: calc(24px + env(safe-area-inset-top)) calc(24px + env(safe-area-inset-right))
+               calc(24px + env(safe-area-inset-bottom)) calc(24px + env(safe-area-inset-left));
       background-image: radial-gradient(ellipse at 15% 15%, rgba(255, 179, 172, 0.08) 0%, transparent 50%),
                         radial-gradient(ellipse at 85% 85%, rgba(255, 210, 122, 0.06) 0%, transparent 50%);
     }
@@ -754,7 +767,12 @@
         z-index: 300;
         max-height: none;
         margin: 0;
-        padding: 16px 20px 24px;
+        /* This overlay is position:fixed/inset:0, so it sits outside
+           body's own padding entirely and needs its own safe-area
+           handling -- otherwise the collapse button and cover corner sit
+           right under the notch/status bar with nothing clearing it. */
+        padding: calc(16px + env(safe-area-inset-top)) calc(20px + env(safe-area-inset-right))
+                 calc(24px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));
         background-color: var(--md-sys-color-surface-container);
         overflow-y: hidden;
         /* Plain block flow, not display:flex -- flex-direction:column
@@ -809,13 +827,16 @@
         flex-direction: row;
         align-items: stretch;
         gap: 16px;
-        padding: 10px 16px;
+        /* Landscape puts the notch/dynamic island on a *side*, not the top
+           -- left/right is what actually needs the safe-area padding here,
+           not top/bottom like the portrait overlay above. */
+        padding: 10px calc(16px + env(safe-area-inset-right)) 10px calc(16px + env(safe-area-inset-left));
         overflow: hidden;
       }
       .player-inline-header {
         position: absolute;
         top: 8px;
-        right: 8px;
+        right: calc(8px + env(safe-area-inset-right));
         margin-bottom: 0;
         z-index: 1;
       }
@@ -1377,7 +1398,10 @@
     }
 
     @media (max-width: 420px) {
-      body { padding: 16px; }
+      body {
+        padding: calc(16px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right))
+                 calc(16px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+      }
       .m3-card { padding: 32px 20px; }
       .subtitle { font-size: 1.1rem; }
       .feature-row span:last-child { font-size: 0.85rem; }
