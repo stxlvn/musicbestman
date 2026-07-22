@@ -392,12 +392,12 @@
       position: fixed;
       left: 0; right: 0; bottom: 0;
       z-index: 250; /* below the fullscreen player overlay (300), so expanding it naturally covers this instead of needing extra coordination */
-      /* Own compositor layer -- the JS below (see the visualViewport
-         script near the tab-switching code) nudges this via
-         transform every time Chrome's address bar shows/hides during a
-         scroll, and transform-only updates stay smooth precisely because
-         they're compositor-thread, not main-thread layout. */
+      /* Own compositor layer for the slide-out/in transform below (see
+         .nav-scroll-hidden and the scroll-hide script near the
+         tab-switching code) -- transform-only updates stay smooth
+         because they're compositor-thread, not main-thread layout. */
       will-change: transform;
+      transition: transform 0.25s ease;
       /* Translucent + blurred (frosted glass) instead of a flat opaque
          fill, per request -- lets a hint of whatever's scrolled
          underneath show through instead of a hard-edged solid bar.
@@ -409,6 +409,15 @@
       backdrop-filter: blur(20px);
       -webkit-backdrop-filter: blur(20px);
       padding-bottom: env(safe-area-inset-bottom);
+    }
+    /* Slid fully off-screen for the duration of a scroll gesture (see the
+       scroll-hide script) instead of trying to keep it glued in place
+       during it -- whatever the browser's address-bar transition does to
+       a fixed element while scrolling happens off-screen, invisible, and
+       it slides back in on its own clean transition once scrolling has
+       actually settled. */
+    .bottom-nav.nav-scroll-hidden {
+      transform: translateY(100%);
     }
     /* Fades the page content into the bar's own translucent color over a
        short span instead of ending sharply right at its top edge --
@@ -3868,43 +3877,38 @@
 
   <script>
     (function () {
-      // Chrome for Android: position:fixed's own bounding box is computed
-      // against the *layout* viewport, which the browser deliberately
-      // resizes as its address bar collapses/expands during a scroll
-      // gesture -- confirmed directly (screen recording on a real device,
-      // twice: once before the svh fix, once after switching .bottom-nav
-      // to position:sticky, which turned out to be a worse regression --
-      // narrow/overlapping rendering *and* the jitter was still there
-      // regardless) that this made the bar visibly jump/judder mid-scroll,
-      // independent of which CSS positioning scheme or length unit was
-      // used. The Visual Viewport API reports the *actual* visible area
-      // separately from that resizing layout viewport, so this nudges the
-      // bar up via transform by exactly the gap between them whenever the
-      // address bar is (partially) shown, and back to identity once it's
-      // fully hidden (gap 0) -- tracking the real screen instead of the
-      // viewport Chrome is mid-animation on. Left .bottom-nav's own CSS as
-      // plain position:fixed (confirmed correct for width/overlap,
-      // unlike the sticky attempt) -- this only adds a corrective offset
-      // on top of it.
+      // Three earlier attempts at the mobile-scroll jitter (dvh->svh,
+      // position:sticky -- reverted, it broke width/overlap outright --
+      // then a Visual Viewport API correction via transform) all failed
+      // on real-device testing, and research after the third pointed to
+      // why: Android's asynchronous scrolling (the compositor thread
+      // scrolls independently of the main JS thread) means *any*
+      // script-driven position update in response to scrolling lags
+      // behind and visibly flickers -- a documented, acknowledged
+      // limitation on both Chrome and Firefox for Android, not something
+      // fixable by trying yet another positioning scheme or a smarter
+      // correction formula. Firefox for Android additionally just defers
+      // repositioning fixed elements until scrolling fully stops rather
+      // than tracking the address bar at all, per Mozilla's own bug
+      // tracker -- an open, unfixed bug on their end.
+      // Given that, this sidesteps the problem instead of fighting it:
+      // hide the bar for the duration of the scroll gesture (so whatever
+      // jitter/snap the browser's address-bar transition causes happens
+      // while it's off-screen and invisible), then slide it back in once
+      // scrolling has actually settled -- a plain, one-time CSS
+      // transition at that point, nothing fighting the browser's own
+      // async scroll timing.
       const nav = document.querySelector('.bottom-nav');
-      if (!nav || !window.visualViewport) return; // no-op fallback: plain fixed positioning, same as before this existed
-      let ticking = false;
-      function apply() {
-        ticking = false;
-        const vv = window.visualViewport;
-        const layoutHeight = document.documentElement.clientHeight;
-        const visualBottom = vv.height + vv.offsetTop;
-        const gap = layoutHeight - visualBottom;
-        nav.style.transform = gap > 0.5 ? `translateY(${-gap}px)` : '';
+      if (!nav) return;
+      let hideTimeout = null;
+      function onScroll() {
+        nav.classList.add('nav-scroll-hidden');
+        clearTimeout(hideTimeout);
+        hideTimeout = setTimeout(() => {
+          nav.classList.remove('nav-scroll-hidden');
+        }, 200);
       }
-      function requestUpdate() {
-        if (ticking) return;
-        ticking = true;
-        requestAnimationFrame(apply);
-      }
-      window.visualViewport.addEventListener('resize', requestUpdate);
-      window.visualViewport.addEventListener('scroll', requestUpdate);
-      requestUpdate();
+      window.addEventListener('scroll', onScroll, { passive: true });
     })();
   </script>
 
