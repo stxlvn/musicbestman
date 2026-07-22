@@ -14,9 +14,26 @@
        a plain browser tab -- see the install banner JS for why this radio
        specifically cares about that. -->
   <link rel="manifest" href="/manifest.json">
-  <meta name="theme-color" content="#171111">
+  <!-- #221918, not the flat --md-sys-color-background (#171111): Android
+       (unlike iOS's black-translucent below) paints the status bar AND
+       the system navigation bar as an opaque flat fill from this one
+       value, with no way for real page content to show through it -- so
+       matching it to plain background left a visible seam against
+       .bottom-nav's own surface, which is background blended with 75%
+       rgba(37,27,26) (--md-sys-color-surface-container) underneath its
+       blur. #221918 is that exact blend (37*.75+23*.25, 27*.75+17*.25,
+       26*.75+17*.25 rounded), so the nav-bar edge reads as continuous
+       instead of a mismatched black band, at the cost of only a barely
+       perceptible tint at the status-bar edge (which has no card behind
+       it, just plain background). -->
+  <meta name="theme-color" content="#221918">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <!-- black-translucent: real page content (including the accent-color
+       radial gradients on body, see below) draws under the status bar and
+       home-indicator instead of a flat system-painted fill -- Android has
+       no equivalent for a plain installed web app, hence the theme-color
+       color-match above being the closest available substitute there. -->
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Your Radio">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2353,6 +2370,7 @@
     // after the first real decision (installed/dismissed), this just keeps
     // it from re-registering the check on every reconnect too.
     radioAudio.addEventListener('playing', () => maybeShowInstallBanner(), { once: true });
+
 
     // Plain target="_blank" still left the main page's fate tied to
     // whatever the popup ended up doing on some mobile browsers -- if the
