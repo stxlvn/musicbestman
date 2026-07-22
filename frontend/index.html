@@ -1048,7 +1048,20 @@
       margin-bottom: 16px; color: var(--md-sys-color-on-surface-variant);
       text-transform: uppercase; letter-spacing: 0.05em;
     }
-    .queue-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+    /* overflow-anchor:none -- confirmed directly (screen recording,
+       frame-by-frame) this list is the actual source of the mobile
+       scroll "jump" reports, not the address bar/viewport as four
+       earlier attempts assumed: fetchQueue() polls every 5s and
+       updateQueueList() adds/removes/reorders <li> items with height
+       animations (see it above) whenever the queue changes. A resizing
+       list above or within the visible area is exactly what triggers a
+       browser's scroll anchoring -- it tries to keep the same content
+       visually in place by silently adjusting the scroll offset, which
+       reads as the page (and everything fixed/sticky to it, including
+       the bottom nav) jumping. Scoped to this list specifically, not the
+       whole page, since disabling anchoring globally would also stop it
+       compensating for legitimate cases elsewhere. */
+    .queue-list { list-style: none; display: flex; flex-direction: column; gap: 8px; overflow-anchor: none; }
     /* Desktop-only -- mobile reads the description via the cover-tap modal
        instead (see .player-description-text), not duplicated here too.
        Styled the same as .queue-panel itself (no card/backdrop of its
