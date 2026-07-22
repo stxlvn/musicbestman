@@ -363,6 +363,18 @@
          zeroed on the sides (kept top/bottom) so its children fill that
          box edge to edge exactly like the others do. */
       #queue-panel { max-width: 320px; padding-left: 0; padding-right: 0; }
+      /* Compacted specifically so 5 upcoming tracks fit on one mobile
+         screen without needing to scroll into them -- per request.
+         Shrinks the heading's own bottom margin, the gap between rows,
+         each row's own padding/gap, the number-circle size, and both
+         text lines a notch, rather than any one of those doing all the
+         work alone. */
+      .queue-panel h2 { margin-bottom: 10px; }
+      .queue-list { gap: 4px; }
+      .queue-item { padding: 5px 6px; gap: 8px; }
+      .queue-item .qi-num { width: 20px; height: 20px; font-size: 0.68rem; }
+      .queue-item .qi-title { font-size: 0.82rem; }
+      .queue-item .qi-artist { font-size: 0.72rem; }
       /* .side-links was center-aligned, everything else in this tab is
          left-aligned against that shared 320px box. !important since its
          own base rule (same specificity, plain class selector) is
