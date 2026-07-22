@@ -129,6 +129,42 @@
       .ripple { display: none; }
     }
 
+    /* Hidden above the top edge by default (translateY(-60px), on top of
+       centering itself horizontally), pulled down 1:1 with the finger by
+       the script near the tab-switching code, transitioning back only
+       when the finger actually lifts (no transition while actively
+       dragging -- it needs to track the touch point exactly, a lagging
+       transition there would feel unresponsive). */
+    .pull-refresh {
+      position: fixed;
+      top: 0;
+      left: 50%;
+      transform: translate(-50%, -60px);
+      z-index: 260;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background-color: var(--md-sys-color-surface-container);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .pull-refresh svg { width: 20px; height: 20px; fill: var(--md-sys-color-primary); }
+    /* Added only once the finger actually lifts (see the script), not
+       during the drag itself -- position needs to track the touch point
+       exactly while dragging, and a transition running at the same time
+       would make it visibly lag behind the finger. */
+    .pull-refresh.pull-snapping { transition: transform 0.2s ease; }
+    .pull-refresh.pull-refreshing svg { animation: pull-refresh-spin 0.7s linear infinite; }
+    @keyframes pull-refresh-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .pull-refresh.pull-refreshing svg { animation: none; }
+    }
+
     body {
       font-family: 'Product Sans', 'Roboto Flex', system-ui, sans-serif;
       background-color: var(--md-sys-color-background);
@@ -1942,6 +1978,15 @@
   </style>
 </head>
 <body data-active-tab="radio">
+  <!-- Pull-to-refresh: the browser's own native gesture for this is tied
+       to the *document* itself being pulled past its top edge, which no
+       longer happens now that <html> doesn't scroll at all and body
+       handles it internally instead (see the document-scroll-lock rule
+       in the stylesheet) -- so it needed rebuilding by hand, see the
+       script near the tab-switching code. -->
+  <div id="pull-refresh" class="pull-refresh" aria-hidden="true">
+    <svg viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0020 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 004 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"></path></svg>
+  </div>
   <div class="top-bar">
     <div class="top-bar-title">Your Radio</div>
     <a href="/admin/" id="admin-link" class="admin-link" title="Панель администратора" aria-label="Панель администратора">
@@ -3940,6 +3985,60 @@
       buttons.forEach((btn) => {
         btn.addEventListener('click', () => switchTab(btn.dataset.tabTarget));
       });
+    })();
+  </script>
+
+  <script>
+    (function () {
+      // The browser's own native pull-to-refresh is tied to the
+      // *document* itself being dragged past its top edge -- gone now
+      // that <html> doesn't scroll at all and body handles it internally
+      // instead (see the document-scroll-lock rule in the stylesheet, and
+      // .queue-list's own overscroll-behavior:contain right below it).
+      // Rebuilt by hand: only starts tracking a pull when body is
+      // already scrolled to its own top (dy from further down the page
+      // is just an ordinary scroll, not a refresh gesture), follows the
+      // finger 1:1 with no transition while dragging, and only animates
+      // on release (snap back under threshold, or into a spin + reload
+      // past it).
+      const indicator = document.getElementById('pull-refresh');
+      if (!indicator) return;
+      const threshold = 70;
+      const maxPull = 100;
+      let startY = null;
+      let currentDy = 0;
+      let refreshing = false;
+
+      document.body.addEventListener('touchstart', (e) => {
+        if (refreshing || document.body.scrollTop > 0) { startY = null; return; }
+        startY = e.touches[0].clientY;
+        indicator.classList.remove('pull-snapping');
+      }, { passive: true });
+
+      document.body.addEventListener('touchmove', (e) => {
+        if (startY === null || refreshing) return;
+        const dy = e.touches[0].clientY - startY;
+        if (dy <= 0) { currentDy = 0; return; }
+        currentDy = Math.min(dy, maxPull);
+        indicator.style.transform = `translate(-50%, ${-60 + currentDy}px)`;
+      }, { passive: true });
+
+      function endPull() {
+        if (startY === null || refreshing) { startY = null; return; }
+        indicator.classList.add('pull-snapping');
+        if (currentDy >= threshold) {
+          refreshing = true;
+          indicator.classList.add('pull-refreshing');
+          indicator.style.transform = 'translate(-50%, 16px)';
+          window.location.reload();
+        } else {
+          indicator.style.transform = 'translate(-50%, -60px)';
+        }
+        startY = null;
+        currentDy = 0;
+      }
+      document.body.addEventListener('touchend', endPull);
+      document.body.addEventListener('touchcancel', endPull);
     })();
   </script>
 
