@@ -403,7 +403,7 @@
         width: min(124px, 18vh); height: min(124px, 18vh);
         margin: 0 auto min(20px, 2.5vh);
       }
-      .card-about h1 { font-size: clamp(1.6rem, 8.5vw, 2.5rem); margin-bottom: min(6px, 1vh); }
+      .card-about .site-logo { height: clamp(32px, 8.5vw, 50px); margin-bottom: min(6px, 1vh); }
       .card-about .subtitle { margin-bottom: min(15px, 2vh); }
       .card-about .stats-badge { margin: 0 0 min(20px, 2.5vh); padding: 7px 18px; }
       .card-about .feature-list { gap: min(13px, 1.6vh); margin-bottom: min(22px, 2.5vh); }
@@ -658,7 +658,7 @@
     }
     .avatar-container img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
 
-    h1 { font-family: 'Product Sans', 'Roboto Flex', sans-serif; font-size: clamp(1.7rem, 9vw, 2.75rem); font-weight: 700; margin-bottom: 8px; color: var(--md-sys-color-on-surface); }
+    .site-logo { display: block; height: clamp(34px, 9vw, 55px); width: auto; margin-bottom: 8px; }
     .subtitle { font-size: 1.25rem; color: var(--md-sys-color-tertiary); margin-bottom: 18px; }
 
     .feature-list {
@@ -945,10 +945,8 @@
        desktop) sitting right next to this one already. */
     .top-bar-title {
       display: none;
-      font-family: 'Product Sans', 'Roboto Flex', sans-serif;
-      font-size: 1.1rem;
-      font-weight: 700;
-      color: var(--md-sys-color-on-surface);
+      height: 24px;
+      width: auto;
     }
     @media (max-width: 1024px) {
       /* Both flex-based attempts (space-between, then an auto margin)
@@ -2005,7 +2003,7 @@
     <svg viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0020 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 004 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"></path></svg>
   </div>
   <div class="top-bar">
-    <div class="top-bar-title">Your Radio</div>
+    <img class="top-bar-title" src="/logo.png" alt="Your Radio">
     <a href="/admin/" id="admin-link" class="admin-link" title="Панель администратора" aria-label="Панель администратора">
       <svg viewBox="0 0 24 24"><path d="M11 7l-1.41 1.41L12.17 11H2v2h10.17l-2.58 2.59L11 17l5-5zM20 3h-8v2h8v14h-8v2h8c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg>
     </a>
@@ -2016,7 +2014,7 @@
     <div class="avatar-container stagger-item delay-1">
       <img src="/avatar.jpg" alt="Your Radio">
     </div>
-    <h1 class="stagger-item delay-2">Your Radio</h1>
+    <img class="site-logo stagger-item delay-2" src="/logo.png" alt="Your Radio">
     <div class="subtitle stagger-item delay-3">От ретро-хитов до свежих релизов</div>
 
     <div class="stats-badge stagger-item delay-3">
