@@ -284,10 +284,6 @@ PAGE_TEMPLATE = """
     background: rgba(255,255,255,0.08); color: var(--on-surface); font-weight: 600; cursor: pointer; display: none;
   }
   .upload-modal-close.visible { display: block; }
-  .add-link-divider {
-    text-align: center; margin: 18px 0; color: var(--on-surface-variant);
-    font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em;
-  }
 </style>
 </head>
 <body>
@@ -344,11 +340,14 @@ PAGE_TEMPLATE = """
 
   <div class="card">
     <h2>Добавить треки</h2>
-    <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data" id="upload-form">
+    <form id="add-form">
       <label>Файлы (можно выбрать несколько)</label>
-      <input type="file" name="audio_files" multiple required accept=".mp3,.flac,.m4a,.ogg,.wav,.aac" id="audio-files-input">
+      <input type="file" name="audio_files" multiple accept=".mp3,.flac,.m4a,.ogg,.wav,.aac" id="audio-files-input">
 
-      <label>Куда поставить</label>
+      <label>Ссылки на сообщения в канале, по одной на строку (t.me/{{ telegram_channel or '...' }}/12345)</label>
+      <textarea name="channel_links" rows="4" placeholder="https://t.me/{{ telegram_channel or 'channel' }}/12345&#10;https://t.me/{{ telegram_channel or 'channel' }}/12346&#10;..." id="channel-links-input"></textarea>
+
+      <label>Куда поставить (первое; дальше по порядку, друг за другом)</label>
       <select name="after" id="after-select">
         <option value="__front__">Играть следующим (сразу после того, что уже нельзя переставить)</option>
         {% for it in queue_items %}
@@ -356,24 +355,7 @@ PAGE_TEMPLATE = """
         {% endfor %}
       </select>
 
-      <button type="submit">Загрузить и поставить в очередь</button>
-    </form>
-
-    <div class="add-link-divider">или</div>
-
-    <form id="add-link-form">
-      <label>Ссылки на сообщения в канале, по одной на строку (t.me/{{ telegram_channel or '...' }}/12345)</label>
-      <textarea name="channel_links" required rows="4" placeholder="https://t.me/{{ telegram_channel or 'channel' }}/12345&#10;https://t.me/{{ telegram_channel or 'channel' }}/12346&#10;..." id="channel-links-input"></textarea>
-
-      <label>Куда поставить (первую ссылку; дальше по порядку, друг за другом)</label>
-      <select name="after" id="after-select-link">
-        <option value="__front__">Играть следующим (сразу после того, что уже нельзя переставить)</option>
-        {% for it in queue_items %}
-          <option value="{{ it.id }}">После «{{ it.title }}» ({{ loop.index }} в очереди)</option>
-        {% endfor %}
-      </select>
-
-      <button type="submit" id="add-link-submit">Найти в канале и поставить в очередь</button>
+      <button type="submit" id="add-form-submit">Поставить в очередь</button>
     </form>
   </div>
   </div>
@@ -517,7 +499,7 @@ PAGE_TEMPLATE = """
     refreshState();
     setInterval(refreshState, 4000);
 
-    const uploadForm = document.getElementById('upload-form');
+    const addForm = document.getElementById('add-form');
     const uploadOverlay = document.getElementById('upload-overlay');
     const uploadTitle = document.getElementById('upload-modal-title');
     const uploadFill = document.getElementById('upload-progress-fill');
@@ -525,9 +507,12 @@ PAGE_TEMPLATE = """
     const uploadSub = document.getElementById('upload-modal-sub');
     const uploadClose = document.getElementById('upload-modal-close');
     const filesInput = document.getElementById('audio-files-input');
+    const channelLinksInput = document.getElementById('channel-links-input');
+    // afterSelect already declared above (shared with refreshState's
+    // dynamic option repopulation)
 
-    function showUploadModal() {
-      uploadTitle.textContent = 'Загрузка файлов...';
+    function showUploadModal(title) {
+      uploadTitle.textContent = title;
       uploadFill.style.width = '0%';
       uploadText.textContent = '0%';
       uploadSub.textContent = '';
@@ -536,91 +521,57 @@ PAGE_TEMPLATE = """
       uploadOverlay.classList.add('visible');
     }
 
-    uploadForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      if (!filesInput.files.length) return;
+    function setProgress(pct) {
+      uploadFill.style.width = pct + '%';
+      uploadText.textContent = pct + '%';
+    }
 
-      const formData = new FormData(uploadForm);
-      showUploadModal();
+    // Wraps the existing XHR-based upload (byte-level progress needs XHR;
+    // fetch() has no equivalent for the *upload* side) in a promise so one
+    // combined submit handler can await it before moving on to links.
+    function uploadFiles(files) {
+      return new Promise((resolve) => {
+        const formData = new FormData();
+        for (const f of files) formData.append('audio_files', f);
+        formData.append('after', afterSelect.value);
 
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', uploadForm.action, true);
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', 'upload', true);
 
-      xhr.upload.addEventListener('progress', (ev) => {
-        if (!ev.lengthComputable) return;
-        const pct = Math.round((ev.loaded / ev.total) * 100);
-        uploadFill.style.width = pct + '%';
-        uploadText.textContent = pct + '%';
-        if (pct >= 100) {
-          uploadTitle.textContent = 'Обрабатываю на сервере...';
-          uploadSub.textContent = 'Файлы уже загружены, идёт распознавание тегов и постановка в очередь. На медленной сети это может занять немного времени.';
-        }
+        xhr.upload.addEventListener('progress', (ev) => {
+          if (!ev.lengthComputable) return;
+          const pct = Math.round((ev.loaded / ev.total) * 100);
+          setProgress(pct);
+          if (pct >= 100) {
+            uploadSub.textContent = 'Файлы уже загружены, идёт распознавание тегов и постановка в очередь. На медленной сети это может занять немного времени.';
+          }
+        });
+        xhr.addEventListener('load', () => {
+          if (xhr.status >= 200 && xhr.status < 400) {
+            resolve({ ok: true });
+          } else {
+            resolve({ ok: false, error: 'Сервер вернул код ' + xhr.status });
+          }
+        });
+        xhr.addEventListener('error', () => resolve({ ok: false, error: 'ошибка сети' }));
+        xhr.addEventListener('timeout', () => resolve({ ok: false, error: 'истекло время ожидания' }));
+        xhr.timeout = 590000; // just under nginx/waitress's 600s ceiling
+        xhr.send(formData);
       });
+    }
 
-      xhr.addEventListener('load', () => {
-        if (xhr.status >= 200 && xhr.status < 400) {
-          uploadTitle.textContent = 'Готово';
-          uploadFill.style.width = '100%';
-          uploadText.textContent = '100%';
-          uploadSub.textContent = 'Треки добавлены в очередь.';
-          uploadForm.reset();
-          refreshState();
-          setTimeout(() => uploadOverlay.classList.remove('visible'), 1200);
-        } else {
-          uploadTitle.textContent = 'Ошибка загрузки';
-          uploadSub.textContent = 'Сервер вернул код ' + xhr.status + '. Попробуйте ещё раз.';
-          uploadSub.classList.add('error');
-          uploadClose.classList.add('visible');
-        }
-      });
-
-      xhr.addEventListener('error', () => {
-        uploadTitle.textContent = 'Ошибка сети';
-        uploadSub.textContent = 'Не удалось загрузить файлы — проверьте соединение и попробуйте снова.';
-        uploadSub.classList.add('error');
-        uploadClose.classList.add('visible');
-      });
-
-      xhr.addEventListener('timeout', () => {
-        uploadTitle.textContent = 'Истекло время ожидания';
-        uploadSub.textContent = 'Загрузка заняла слишком много времени. Попробуйте на более стабильном соединении.';
-        uploadSub.classList.add('error');
-        uploadClose.classList.add('visible');
-      });
-
-      xhr.timeout = 590000; // just under nginx/waitress's 600s ceiling
-      xhr.send(formData);
-    });
-
-    uploadClose.addEventListener('click', () => uploadOverlay.classList.remove('visible'));
-
-    // Several links submit as separate requests in sequence (not all at
-    // once -- a Telegram flood-wait from hammering it concurrently would
-    // be a worse failure mode than just taking longer), each one only
-    // starting once the previous has actually finished downloading. That
-    // sequencing is also what makes a real, per-track progress readout
-    // possible at all, reusing the same overlay markup as file uploads.
-    const addLinkForm = document.getElementById('add-link-form');
-    const addLinkSubmit = document.getElementById('add-link-submit');
-    const channelLinksInput = document.getElementById('channel-links-input');
-    const afterSelectLink = document.getElementById('after-select-link');
-
-    addLinkForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const links = channelLinksInput.value.split('\n').map((s) => s.trim()).filter(Boolean);
-      if (!links.length) return;
-
-      showUploadModal();
-      uploadTitle.textContent = 'Добавляю треки из канала...';
-
-      // Each successful add's own id becomes the "after" for the next
-      // link in the batch, so a multi-link paste lands in the queue in
-      // the same top-to-bottom order it was pasted in, each one right
-      // after the last, rather than every link competing for the same
-      // single insertion point.
-      let afterId = afterSelectLink.value;
+    // Several links are added as separate requests in sequence (not all
+    // at once -- a Telegram flood-wait from hammering it concurrently
+    // would be a worse failure mode than just taking longer), each one
+    // only starting once the previous has actually finished downloading.
+    async function addLinks(links) {
+      // Continues from wherever the files phase (if any) just landed, so
+      // the two phases don't compete for the same single insertion point
+      // -- see the shared afterId variable in the caller below.
+      let afterId = afterSelect.value;
       const results = [];
       for (let i = 0; i < links.length; i++) {
+        uploadTitle.textContent = 'Добавляю треки из канала...';
         uploadSub.textContent = `Ищу трек ${i + 1} из ${links.length} в канале` +
           (links.length > 1 ? ' (большие lossless-файлы могут занять время)' : '') + '...';
         try {
@@ -639,26 +590,64 @@ PAGE_TEMPLATE = """
         } catch (err) {
           results.push({ ok: false, link: links[i], error: 'ошибка сети' });
         }
-        const pct = Math.round(((i + 1) / links.length) * 100);
-        uploadFill.style.width = pct + '%';
-        uploadText.textContent = pct + '%';
+        setProgress(Math.round(((i + 1) / links.length) * 100));
+      }
+      return results;
+    }
+
+    // One button for both -- files and links used to be two separate
+    // forms/buttons; either or both can be filled in now, processed as
+    // two phases of the same submit (files first, then links) sharing
+    // one progress overlay instead of picking one path up front.
+    addForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const files = Array.from(filesInput.files);
+      const links = channelLinksInput.value.split('\n').map((s) => s.trim()).filter(Boolean);
+      if (!files.length && !links.length) {
+        channelLinksInput.setCustomValidity('Выберите файлы или укажите хотя бы одну ссылку');
+        channelLinksInput.reportValidity();
+        channelLinksInput.setCustomValidity('');
+        return;
       }
 
-      const okResults = results.filter((r) => r.ok);
-      const failed = results.filter((r) => !r.ok);
-      uploadTitle.textContent = failed.length ? 'Готово с ошибками' : 'Готово';
-      uploadSub.textContent = `Добавлено: ${okResults.length} из ${links.length}` +
-        (okResults.length ? ' — ' + okResults.map((r) => r.title).join(', ') : '') +
-        (failed.length ? '. Не удалось: ' + failed.map((f) => f.link + ' (' + f.error + ')').join('; ') : '');
-      if (failed.length) {
+      showUploadModal('Загрузка файлов...');
+      let uploadError = null;
+      if (files.length) {
+        const result = await uploadFiles(files);
+        if (!result.ok) uploadError = result.error;
+      }
+
+      let linkResults = [];
+      if (!uploadError && links.length) {
+        linkResults = await addLinks(links);
+      }
+
+      const okLinks = linkResults.filter((r) => r.ok);
+      const failedLinks = linkResults.filter((r) => !r.ok);
+      const parts = [];
+      if (files.length && !uploadError) parts.push(`файлов: ${files.length}`);
+      if (links.length) parts.push(`из канала: ${okLinks.length} из ${links.length}`);
+
+      const hasError = !!uploadError || failedLinks.length > 0;
+      uploadTitle.textContent = hasError ? 'Готово с ошибками' : 'Готово';
+      uploadFill.style.width = '100%';
+      uploadText.textContent = '100%';
+      uploadSub.textContent = (uploadError ? 'Ошибка загрузки файлов: ' + uploadError + '. ' : '') +
+        (parts.length ? 'Добавлено — ' + parts.join(', ') + '.' : '') +
+        (okLinks.length ? ' ' + okLinks.map((r) => r.title).join(', ') + '.' : '') +
+        (failedLinks.length ? ' Не удалось: ' + failedLinks.map((f) => f.link + ' (' + f.error + ')').join('; ') : '');
+
+      if (hasError) {
         uploadSub.classList.add('error');
         uploadClose.classList.add('visible');
       } else {
         setTimeout(() => uploadOverlay.classList.remove('visible'), 1500);
       }
-      addLinkForm.reset();
+      addForm.reset();
       refreshState();
     });
+
+    uploadClose.addEventListener('click', () => uploadOverlay.classList.remove('visible'));
   </script>
 </body>
 </html>
