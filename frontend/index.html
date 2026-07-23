@@ -213,6 +213,10 @@
       max-width: 1400px;
       display: flex;
       justify-content: flex-end;
+      /* body's children default to flex-shrink:1 -- harmless here since
+         .top-bar's own content is naturally small, but see .layout's own
+         flex-shrink:0 right below for why this matters at all now. */
+      flex-shrink: 0;
     }
     .admin-link {
       width: 36px;
@@ -234,6 +238,22 @@
       justify-content: center;
       gap: 20px;
       width: 100%;
+      /* Confirmed directly (screen recording) this was the actual cause
+         of the queue's 5th row getting silently clipped with no way to
+         scroll to it, specifically when the browser's address bar was
+         taking up extra space: body is now a fixed height:100% flex
+         column (see the document-scroll-lock rule), and flex children
+         default to flex-shrink:1 -- without this, flexbox was actually
+         *shrinking* .layout down to fit inside body's fixed height
+         instead of letting it overflow into body's own overflow-y:auto.
+         #queue-panel (a flex-shrink:1 child of .layout, with its own
+         overflow:hidden -- see below) absorbed that shrinkage and
+         silently clipped whatever didn't fit, rather than the excess
+         ever reaching body's scroll at all. flex-shrink:0 here stops the
+         whole chain: .layout renders at its real, natural content height
+         no matter what, so anything taller than the visible area becomes
+         genuine overflow body can actually scroll to. */
+      flex-shrink: 0;
       /* The two main cards (max-width 500px each) + gap + the queue panel
          (380px) need ~1400px combined to all sit at their natural size.
          The whole row (main cards + queue panel together) is centered as
